@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern React Calculator</title>
+    
+    <!-- React & DOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-color: #ffffff;
+            --primary-color: #3b82f6; /* Blue */
+            --secondary-color: #ef4444; /* Red for AC */
+            --btn-bg: rgba(255, 255, 255, 0.08);
+            --btn-hover: rgba(255, 255, 255, 0.15);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at 50% 10%, #1e293b, #020617);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        /* Ambient Background Glow */
+        .glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, rgba(0, 0, 0, 0) 70%);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .calculator {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            width: 340px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .display-container {
+            text-align: right;
+            margin-bottom: 10px;
+            padding: 0 10px;
+        }
+
+        .previous-operand {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1rem;
+            min-height: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .current-operand {
+            font-size: 3rem;
+            font-weight: 600;
+            word-wrap: break-word;
+            word-break: break-all;
+            line-height: 1.1;
+        }
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        button {
+            appearance: none;
+            background: var(--btn-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-color);
+            font-family: inherit;
+            font-size: 1.25rem;
+            border-radius: 16px;
+            cursor: pointer;
+            padding: 16px 0;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        button:hover {
+            background: var(--btn-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .span-2 {
+            grid-column: span 2;
+        }
+
+        .btn-op {
+            color: var(--primary-color);
+            font-weight: 600;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .btn-op:hover {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .btn-ac {
+            color: var(--secondary-color);
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .btn-ac:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-eq {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+        }
+
+        .btn-eq:hover {
+            background: #2563eb;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="glow"></div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const Calculator = () => {
+            const [currentOperand, setCurrentOperand] = useState('0');
+            const [previousOperand, setPreviousOperand] = useState('');
+            const [operation, setOperation] = useState(undefined);
+            const [overwrite, setOverwrite] = useState(false);
+
+            const formatOperand = (operand) => {
+                if (!operand) return '';
+                const [integer, decimal] = operand.split(".");
+                if (decimal == null) return new Intl.NumberFormat("en-US").format(integer);
+                return `${new Intl.NumberFormat("en-US").format(integer)}.${decimal}`;
+            }
+
+            const appendNumber = (number) => {
+                if (number === "." && currentOperand.includes(".")) return;
+                
+                if (overwrite) {
+                    setCurrentOperand(number);
+                    setOverwrite(false);
+                } else {
+                    if (currentOperand === "0" && number !== ".") {
+                        setCurrentOperand(number);
+                    } else {
+                        setCurrentOperand(currentOperand + number);
+                    }
+                }
+            };
+
+            const chooseOperation = (op) => {
+                if (currentOperand === '') return;
+                if (previousOperand !== '') {
+                    const result = compute(previousOperand, currentOperand, operation);
+                    setPreviousOperand(result);
+                    setCurrentOperand('');
+                    setOperation(op);
+                    return;
+                }
+                setOperation(op);
+                setPreviousOperand(currentOperand);
+                setCurrentOperand('');
+            };
+
+            const compute = (prev, current, op) => {
+                const p = parseFloat(prev);
+                const c = parseFloat(current);
+                if (isNaN(p) || isNaN(c)) return "";
+                let computation = "";
+                switch (op) {
+                    case '+':
+                        computation = p + c;
+                        break;
+                    case '−': // match visual symbol
+                        computation = p - c;
+                        break;
+                     case '-': 
+                        computation = p - c;
+                        break;
+                    case '×':
+                        computation = p * c;
+                        break;
+                    case '*':
+                        computation = p * c;
+                        break;
+                    case '÷':
+                        computation = p / c;
+                        break;
+                    case '/':
+                        computation = p / c;
+                        break;
+                    default:
+                        return "";
+                }
+                return computation.toString();
+            };
+
+            const handleEqual = () => {
+                 if (!operation || !previousOperand || !currentOperand) return;
+                 const result = compute(previousOperand, currentOperand, operation);
+                 setCurrentOperand(result);
+                 setOperation(undefined);
+                 setPreviousOperand('');
+                 setOverwrite(true);
+            }
+
+            const clear = () => {
+                setCurrentOperand('0');
+                setPreviousOperand('');
+                setOperation(undefined);
+                setOverwrite(false);
+            };
+
+            const deleteNum = () => {
+                if (overwrite) {
+                    setCurrentOperand('0');
+                    setOverwrite(false);
+                    return;
+                }
+                if (currentOperand === '0') return;
+                if (currentOperand.length === 1) {
+                    setCurrentOperand('0');
+                    return;
+                }
+                setCurrentOperand(currentOperand.slice(0, -1));
+            };
+
+            return (
+                <div className="calculator">
+                    <div className="display-container">
+                        <div className="previous-operand">
+                            {formatOperand(previousOperand)} {operation}
+                        </div>
+                        <div className="current-operand">
+                            {formatOperand(currentOperand)}
+                        </div>
+                    </div>
+                    
+                    <div className="keypad">
+                        <button className="span-2 btn-ac" onClick={clear}>AC</button>
+                        <button className="btn-op" onClick={deleteNum}>DEL</button>
+                        <button className="btn-op" onClick={() => chooseOperation('÷')}>÷</button>
+                        
+                        <button onClick={() => appendNumber('7')}>7</button>
+                        <button onClick={() => appendNumber('8')}>8</button>
+                        <button onClick={() => appendNumber('9')}>9</button>
+                        <button className="btn-op" onClick={() => chooseOperation('×')}>×</button>
+                        
+                        <button onClick={() => appendNumber('4')}>4</button>
+                        <button onClick={() => appendNumber('5')}>5</button>
+                        <button onClick={() => appendNumber('6')}>6</button>
+                        <button className="btn-op" onClick={() => chooseOperation('−')}>−</button>
+                        
+                        <button onClick={() => appendNumber('1')}>1</button>
+                        <button onClick={() => appendNumber('2')}>2</button>
+                        <button onClick={() => appendNumber('3')}>3</button>
+                        <button className="btn-op" onClick={() => chooseOperation('+')}>+</button>
+                        
+                        <button onClick={() => appendNumber('.')}>.</button>
+                        <button onClick={() => appendNumber('0')}>0</button>
+                        <button className="span-2 btn-eq" onClick={handleEqual}>=</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Calculator />);
+    </script>
+</body>
+</html>
